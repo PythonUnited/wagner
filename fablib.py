@@ -96,6 +96,10 @@ def check_sanity(env, tag=None):
 
     branch = repo.active_branch
 
+    if repo.is_dirty(untracked_files=True):
+        error("Your GIT repository for this buildout is dirty")
+        return False
+
     if tag:
 
         if tag not in [t.tag for t in repo.tags]:
@@ -125,10 +129,6 @@ def check_sanity(env, tag=None):
                   "To release on ACC, it should be on 'master "
                   "or on a release branch." % branch)
             return False
-
-    # if repo.is_dirty(untracked_files=True):
-    #    error("Your GIT repository for this buildout is dirty")
-    #    return False
 
     success("sane!")
     return True
