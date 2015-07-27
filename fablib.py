@@ -1,7 +1,9 @@
 import os
 import tempfile
-from fabric.api import sudo, settings, put, run, lcd, local
-from fabric.colors import green, blue, red
+from fabric.api import sudo, settings, put, run, lcd, local, prefix, cd
+from fabric.colors import green, blue, red, yellow
+from contextlib import nested
+from contextlib import contextmanager as _contextmanager
 from git import Repo
 
 
@@ -18,6 +20,11 @@ def info(text, bold=True):
 def error(text, bold=True):
 
     print red(text, bold=bold)
+
+
+def warning(text, bold=True):
+
+    print yellow(text, bold=bold)
 
 
 def install_system_requirements(requirements, system_services=[], os="debian"):
@@ -253,7 +260,7 @@ def upload_eggs(eggs, dest, py_version, env_user):
 
 def summarize(version, eggs):
 
-    lines = []
+    lines = ["***********************************"]
     lines.append("Installed version %s" % version)
     lines.append("Eggs:")
 
@@ -263,4 +270,13 @@ def summarize(version, eggs):
 
         lines.append("  %s: %s" % (egg, egg_info[egg]))
 
-    info("\n".join(lines))
+    success("\n".join(lines))
+
+
+@_contextmanager
+def virtualenv(user):
+
+    activate_cmd = 'source ~%s/bin/activate' % user
+
+    with nested(cd('~%s/' % user), prefix(activate_cmd)):
+        yield
