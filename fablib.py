@@ -109,7 +109,7 @@ def check_sanity(env, tag=None):
 
     if tag:
 
-        if tag not in [t.tag for t in repo.tags]:
+        if tag not in [t.name for t in repo.tags]:
 
             error("No such tag exist on repository!")
             return False
@@ -131,7 +131,7 @@ def check_sanity(env, tag=None):
             error("No tag specified. Can only release tags to ACC")
             return False
 
-        if branch.name != "master" or branch.startswith("release"):
+        if branch.name != "master" and not branch.name.startswith("release"):
             error("Your GIT repository is on branch '%s'.\n"
                   "To release on ACC, it should be on 'master "
                   "or on a release branch." % branch)
@@ -215,7 +215,7 @@ def create_buildout_dist(buildout_path=".", tag=None):
     dist_file = os.path.join(dist_dir, 'buildout.tar')
 
     repo.archive(open(dist_file, 'wb'), treeish=tag,
-                 prefix="buildout-%s/" % get_version())
+                 prefix="buildout-%s/" % get_version(tag=tag))
 
     return dist_file
 
