@@ -191,6 +191,31 @@ extends = buildout-%s.cfg
     fh.unlink
 
 
+def ignore_autocheckout(env, env_home, dist, env_user):
+    TPL = """[buildout]
+extends = autocheckout.cfg
+
+auto-checkout =
+    """
+
+    info("Ignoring autocheckout configuration")
+
+    fh = tempfile.NamedTemporaryFile(delete=False)
+    fh.write(TPL)
+    fh.close()
+
+    fh_base = os.path.basename(fh.name)
+
+    put(fh.name, "/tmp/%s" % fh_base)
+    sudo("cp /tmp/%s %s/buildout-%s/autocheckout-%s.cfg" % (
+        fh_base, env_home, dist, env), user=env_user
+    )
+
+    sudo("rm /tmp/%s" % fh_base)
+
+    fh.unlink
+
+
 def create_buildout_dist(buildout_path=".", tag=None):
     repo = Repo(buildout_path)
 
@@ -225,10 +250,10 @@ def prepare_eggs(eggs, env):
     files like autocheckout-tst.cfg
     :param eggs: eggs to prepare
     :param env: either tst, acc or prd etc.
-    :return:
+    :return: True if all went well, False otherwise
     """
     for egg in eggs:
-        regex = re.compile("%s\s=\s(\S*)\s(\S*)\srev=(.*)$" % egg)
+        regex = re.compile("%s\s=\s(\S*)\s(\S*)\s?(rev=(.*))?$" % egg)
 
         with open("autocheckout-%s.cfg" % env) as f:
             for line in f:
@@ -237,31 +262,39 @@ def prepare_eggs(eggs, env):
                     break
 
         repo_url = result.group(2)
-        branch = result.group(3)
+        rev = result.group(4) or "master"
         repo = None
+
+        # TODO Maybe check whether 'rev' may be released to acc or prd
 
         if os.path.isdir("/tmp/%s" % egg):
             repo = Repo("/tmp/%s" % egg)
+
         if not repo:
-            info("Cloning %s, branch=%s" % (egg, branch))
-            repo = Repo().clone_from(repo_url, "/tmp/%s" % egg, branch=branch)
+            info("Cloning %s, rev=%s" % (egg, rev))
+            repo = Repo().clone_from(repo_url, "/tmp/%s" % egg, branch=rev)
 
         gitcmd = repo.git
-        gitcmd.checkout(result.group(3))
+        gitcmd.checkout(rev)
 
-        success("Prepared %s, branch=%s" % (egg, branch))
+        # TODO | Change the version number in setup.py to match the checked out
+        # TODO | revision
+
+        success("Prepared %s rev=%s" % (egg, rev))
+
+    return True
 
 
 def upload_eggs(eggs, dest, py_version, env_user):
     for egg in eggs:
-        name, version = generate_egg_info(["/tmp/%s" % egg]).items()[0]
+        name, version = generate_egg_info([egg, ]).items()[0]
 
         name = name.replace("-", "_")
 
         with lcd("/tmp/%s" % egg):
-            local("python setup.py bdist_egg")
+            local("python setup.py sdist --formats=zip")
 
-            egg_name = "%s-%s-py%s.egg" % (name, version, py_version)
+            egg_name = "%s-%s.zip" % (name, version)
 
             put("./dist/%s" % egg_name, "/tmp")
 
@@ -284,8 +317,8 @@ def summarize(version, eggs):
 
 
 @_contextmanager
-def virtualenv(user):
-    activate_cmd = 'source ~%s/bin/activate' % user
+def virtualenv(env_home):
+    activate_cmd = 'source %s/bin/activate' % env_home
 
-    with nested(cd('~%s/' % user), prefix(activate_cmd)):
+    with nested(cd(env_home), prefix(activate_cmd)):
         yield
